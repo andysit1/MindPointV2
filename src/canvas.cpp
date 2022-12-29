@@ -6,6 +6,7 @@
 Canvas::Canvas()
 :createMode{false}
 {
+  cam.zoom = 1;
 };
 
 Canvas::Note::Note(float posx, float posy, int width, int height)
@@ -22,8 +23,15 @@ Rectangle Canvas::Note::getRectangle(){
   return Rectangle{_posx, _posy, _width, _height};
 }
 
+Rectangle Canvas::Note::getInputRectangle(){
+  return Rectangle{_posx + 10 , _posy + (_height / 2), _width - 20, 45};
+}
+
+
 void Canvas::Note::draw(){
   DrawRectangle(_posx, _posy, _width, _height, _c);
+  DrawRectangleRec(getInputRectangle(), LIGHTGRAY);
+
 
   if(noteRepositionReady){
     DrawRectangle(_posx - MOUSE_SCALE_MARK_SIZE, _posy - MOUSE_SCALE_MARK_SIZE, MOUSE_SCALE_MARK_SIZE, MOUSE_SCALE_MARK_SIZE, YELLOW);
@@ -42,10 +50,20 @@ void Canvas::Note::draw(){
   if (selected){
     DrawRectangleLinesEx({_posx, _posy, _width, _height}, 1, BLUE);
   }
+
+
+  DrawRectangle(_posx + _width - 20, _posy, 20, 20, editingTextToggle);
+  DrawRectangleRec(getInputRectangle(), PURPLE);
+
+  DrawText(text, _posx + (_width / 2) - (MeasureText(text, 30) / 2), _posy + 20, 30, BLACK);
+
 }
 
 //https://www.raylib.com/examples.html -> logic found here
 void Canvas::Note::checkConidition(){
+  if (CheckCollisionPointRec(GetMousePosition(), getInputRectangle())){
+    getTextInputs();
+  }
 
   if (CheckCollisionPointRec(GetMousePosition(), (Rectangle){ _posx - MOUSE_SCALE_MARK_SIZE, _posy - MOUSE_SCALE_MARK_SIZE, MOUSE_SCALE_MARK_SIZE, MOUSE_SCALE_MARK_SIZE})){
     noteRepositionReady = true;
@@ -69,10 +87,8 @@ void Canvas::Note::checkConidition(){
  //  const int screenWidth = 1600; const int screenHeight = 900;
   if(noteRepositionMode){
     noteRepositionReady = true;
-
     this->_posx = GetMousePosition().x;
     this->_posy = GetMousePosition().y;
-
     if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) noteRepositionMode = false;
   }
   //tops the mouse scale mode on release of left button
@@ -97,6 +113,30 @@ void Canvas::Note::checkConidition(){
   }
 }
 
+//logic found here -> https://www.raylib.com/examples/text/loader.html?name=text_input_box
+void Canvas::Note::getTextInputs(){
+  std::cout << text << std::endl;
+  //key can stack if press at the same time
+  int key = GetCharPressed();
+
+  //makes sure the keys are within a range
+  while (key > 0){
+    if ((key >= 32) && (key <= 125) && (letterCount < MAX_INPUT_CHARS)){
+      text[letterCount] = (char)key;
+      text[letterCount+1] = '\0';
+      letterCount++;
+    }
+    key = GetCharPressed();  // Check next character in the queue
+  }
+  //gets of letter on backspace
+  if (IsKeyPressed(KEY_BACKSPACE)){
+    letterCount--;
+    if (letterCount < 0) letterCount = 0;
+    text[letterCount] = '\0';
+  }
+}
+
+//gets the center of note
 Vector2 Canvas::Note::getPosition(){
   return Vector2{_posx + (_width / 2), _posy + (_height / 2)};
 }
@@ -111,7 +151,6 @@ void Canvas::updateNote(){
   for (int i = 0; i < notes.size(); i++){
     notes[i].checkConidition();
   }
-
   // if (iscreatable){
   //   std::cout << "triggered" << std::endl;
   // }
@@ -170,7 +209,7 @@ void Canvas::conditionCheck(){
   if (createMode == true){
     Color rectColor{BLUE};
     for (int i = 0; i < notes.size(); i++){
-      if (CheckCollisionRecs({GetMousePosition().x, GetMousePosition().y, noteSize.x, noteSize.y}, notes[i].getRectangle())){
+      if (CheckCollisionRecs({GetScreenToWorld2D(GetMousePosition(), cam).x, GetScreenToWorld2D(GetMousePosition(), cam).y, noteSize.x, noteSize.y}, notes[i].getRectangle())){
         rectColor = RED;
         iscreatable = false;
       }
@@ -185,7 +224,7 @@ void Canvas::conditionCheck(){
   }
 
   for (int i = 0; i < notes.size(); i++){
-    if (linkMode && CheckCollisionPointRec(GetMousePosition(), notes[i].getRectangle()) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)){
+    if (linkMode && CheckCollisionPointRec(GetScreenToWorld2D(GetMousePosition(), cam), notes[i].getRectangle()) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON)){
       notes[i].select();
       if (currentHeadNote == nullptr){
         currentHeadNote = &notes[i];
@@ -222,14 +261,39 @@ void Canvas::printLinked(Note* head){
     current = current->next;
   }
 }
-
-Camera2D camera;
+//WIP
 void Canvas::updateCameraView(){
 //I want to zoom in a and out of a the canvas... WIP
+  // if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)){
+  //   Vector2 delta = GetMouseDelta();
+  //   delta = Vector2Scale(delta, -1.0f / cam.zoom);
+  //   cam.target = Vector2Add(cam.target, delta);
+	// }
+  // float wheel = GetMouseWheelMove();
+  // if (wheel != 0)
+  // {
+  //   // get the world point that is under the mouse
+  //   Vector2 mouseWorldPos = GetScreenToWorld2D(GetMousePosition(), cam);
+
+  //   // set the offset to where the mouse is
+  //   cam.offset = GetMousePosition();
+
+  //   // set the target to match, so that the camera maps the world space point under the cursor to the screen space point under the cursor at any zoom
+  //   cam.target = mouseWorldPos;
+
+  //   // zoom
+  //   cam.zoom += wheel * 0.125f;
+  //   if (cam.zoom < 0.125f)
+  //     cam.zoom = 0.125f;
+	// 	}
+
+  //   std::cout << GetScreenToWorld2D(GetMousePosition(), cam).x << " " << GetScreenToWorld2D(GetMousePosition(), cam).y  << std::endl;
+  //   std::cout << GetWorldToScreen2D(GetMousePosition(), cam).x << " " << GetWorldToScreen2D(GetMousePosition(), cam).y << std::endl;
 }
 
 void Canvas::drawNotePairs(Note* obj1, Note* obj2){
   DrawLineEx(obj1->getPosition(), obj2->getPosition(), 10.0f, RED);
+
 }
 
 void Canvas::linkNotes(){
